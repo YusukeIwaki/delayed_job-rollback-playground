@@ -14,7 +14,9 @@ class User < ApplicationRecord
     uniqueness: true,
     length: { in: 4..16 }
     
-  after_create :notify_created
+  after_create do |record|
+    record.delay.notify_created
+  end
   
   has_one :user_identity_verification, dependent: :destroy
   
@@ -27,6 +29,7 @@ class User < ApplicationRecord
       conn = Faraday.new(url: 'http://requestbin.fullcontact.com/')
       response = conn.post '/s9o13cs9', { type: "identity_verification", username: username }
       date = Time.zone.parse(response.headers["date"]).to_i
+      sleep 5
       if date % 2 == 0
         create_user_identity_verification(memo: "OK")
       else
