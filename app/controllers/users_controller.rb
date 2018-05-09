@@ -1,15 +1,19 @@
 class UsersController < ApplicationController
   def index
-    render json: { users: User.all.map{|user| user.attributes.symbolize_keys.slice(:id, :username) } }
+    @users = User.all
+  end
+  
+  def show
+    @user = User.find(params[:id])
   end
   
   def create
-    user = User.create!(params.require(:user).permit(:username))
-    render json: { user: user.attributes.symbolize_keys.slice(:id, :username) }
+    @user = User.create!(params.require(:user).permit(:username))
+    render action: :show
   end
   
   def destroy
-    user = User.destroy(params[:id])
-    render json: { user: user.attributes.symbolize_keys.slice(:id, :username) }
+    @user = User.destroy(params[:id])
+    render action: :show
   end
 end
