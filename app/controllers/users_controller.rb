@@ -8,8 +8,13 @@ class UsersController < ApplicationController
   end
   
   def create
-    @user = User.create!(params.require(:user).permit(:username))
+    User.transaction do
+      @user = User.create!(params.require(:user).permit(:username))
+      @user.verify
+    end
     render action: :show
+  rescue User::IdentityVerificationError
+    render_error(400, "Identity Verification Failure!")
   end
   
   def destroy
