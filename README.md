@@ -1,24 +1,61 @@
-# README
+# Delayed::Job playground.
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+モデルのafter_createでベタに通知をしちゃうと、モデルがロールバックされた時に通知はロールバックできなくて詰む。
 
-Things you may want to cover:
+```
+class User 
+  after_create :notify_created
+  
+  def notify_created
+    # 通知を送る機能
+    # 作るのが面倒なので、RequestBinに `type: notify_created` でアクセスするようにした
+  end
+  
+  def verify
+    # 本人確認機能
+    # 作るのが面倒なので、RequestBinに `type: identity_verification` でアクセスするようにした
+    
+    # 成功時には、UserにひもづいてUserIdentityVerificationレコードを作る
+    # 失敗時には、例外を投げる
+  end
+end
 
-* Ruby version
+class UsersController
+  def create
+    User.transaction do
+      user = User.create!(params.require(:user).permit(...))
+      user.verify
+    end
+  end
+end
+```
 
-* System dependencies
+たとえばこれだと、
 
-* Configuration
+```
+      user = User.create!(params.require(:user).permit(...))
+```
 
-* Database creation
+の時点で、after_createが呼ばれるので、本人確認に失敗して、最終的にトランザクションのロールバックをしたとしても
 
-* Database initialization
+`type: notify_created` のリクエストがRequestBinに記録されてしまう。
 
-* How to run the test suite
+## Delayed::Job使うとどうなる？
 
-* Services (job queues, cache servers, search engines, etc.)
+ふつうに考えればafter_commitでやるようにするとか、サービスクラス作るとか、いろいろ手段はあるけど、とりあえず今回はDelayed::Jobの検証が目的なのでDelayed::Jobを使う。
 
-* Deployment instructions
+```
+class User
+  after_create do |record|
+    record.delay.notify_created  
+  end
+```
 
-* ...
+これにより `notify_created` はいつ実行されるようになるのか？
+本人確認に５秒かかったとしても、そのあとで通知されるようになるの？？というのを検証したかった。
+
+結論から言うと、確実に本人確認が済んでトランザクションを抜けた後に、notify_createdが呼ばれるようになった。
+本人確認でコケたときには、notify_createdは実行されなくなった。
+
+
+予想だけど、Delayed::Jobのデキューがafter_commit的な契機で行われているのではないかなと。
